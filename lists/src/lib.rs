@@ -1,1 +1,1 @@
-pub mod second;
+pub mod my_second;
