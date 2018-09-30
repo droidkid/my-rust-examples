@@ -50,6 +50,25 @@ struct Node<T> {
     next: Link<T>,
 }
 
+impl<T> Node<T> {
+    fn get_next_node(& self) -> Option<& Self> {
+        /*
+           match self.next {
+           Some(ref boxed_node) => {
+           Some(boxed_node)
+           }
+           None => None
+           }
+           */
+
+        self.next.as_ref().map(
+            |boxed_node| {
+                &**boxed_node // Twice because we used as_ref
+            }
+        )
+    }
+}
+
 impl <T> List <T> {
     fn new() -> Self {
         List {
@@ -88,22 +107,22 @@ impl <T> List <T> {
     fn pop(&mut self) -> Option<T> {
         // We have a mutable reference to self.head.
         // match self.head {
-            // v1:
-            // Remember self.head is a mutable reference
-            // Some(boxed_node) tries to take ownership of boxed_node, which is not
-            // possible because we NEVER had ownership of self.head .
-            //
-            //Some(boxed_node) => {
-            //
-            // v2:
-            // Let's try ref boxed_node... Nope, doesn't work.
-            //
-            // The problem is Some(boxed_node.elem) takes ownership of boxed_node.
-            // The issue is we NEED ownership of boxed_node.
-            // Some(ref boxed_node) => {
-            //    Some(boxed_node.elem)
-            // }
-            // None => None,
+        // v1:
+        // Remember self.head is a mutable reference
+        // Some(boxed_node) tries to take ownership of boxed_node, which is not
+        // possible because we NEVER had ownership of self.head .
+        //
+        //Some(boxed_node) => {
+        //
+        // v2:
+        // Let's try ref boxed_node... Nope, doesn't work.
+        //
+        // The problem is Some(boxed_node.elem) takes ownership of boxed_node.
+        // The issue is we NEED ownership of boxed_node.
+        // Some(ref boxed_node) => {
+        //    Some(boxed_node.elem)
+        // }
+        // None => None,
         //}
         //
 
@@ -112,31 +131,90 @@ impl <T> List <T> {
         // head_option_boxed_node will be dropped when this stack ends.
         let head_option_boxed_node = self.head.take();         
 
-        match head_option_boxed_node {
-            Some(mut boxed_node) => {
+        head_option_boxed_node.map(
+            |mut boxed_node| {
                 self.head = boxed_node.next.take();
-                Some(boxed_node.elem)
+                boxed_node.elem
             }
-            None => None,
-        }
-
-
+        )
     }
-}
+    }
+
+    pub struct LinkedListIter<'a, T:'a> {
+        next:  Option<&'a Node<T>>,
+    }
+
+    impl <T> List<T> {
+        pub fn get_iterator(& self) -> LinkedListIter<T> {
+            LinkedListIter {
+                next: self.head.as_ref().map(
+                          |ref_boxed_node| {
+                              /*
+                               * First deref for ref
+                               * Second deref for box
+                               * Now we've got our node
+                               * Return a reference to Node
+                               *
+                               * &ref_boxed_node would return a reference to the Box.
+                               * We want reference to Node.
+                               */
+                              &**ref_boxed_node
+                          }
+                )
+            }
+        }
+    }
+
+
+    impl<'a, T> Iterator for LinkedListIter<'a, T> {
+        type Item = &'a T;
+
+
+        fn next(&mut self) -> Option<Self::Item> {
+            match self.next {
+                Some(ref_to_node) => { // next is of type Option<& Node>
+                    self.next = ref_to_node.get_next_node();
+                    Some(& ref_to_node.elem)
+                }
+                None => None,
+            }
+        }
+    }
 
 #[test]
-fn basic() {
-    
-    let mut l: List<i32> = List::new();
+    fn basic() {
 
-    assert_eq!(l.pop(), None);
+        let mut l: List<i32> = List::new();
 
-    l.push(1);
-    l.push(2);
-    l.push(3);
-    
-    assert_eq!(l.pop(), Some(3));
-    assert_eq!(l.pop(), Some(2));
-    assert_eq!(l.pop(), Some(1));
+        assert_eq!(l.pop(), None);
 
-}
+        l.push(1);
+        l.push(2);
+        l.push(3);
+
+        assert_eq!(l.pop(), Some(3));
+        assert_eq!(l.pop(), Some(2));
+        assert_eq!(l.pop(), Some(1));
+    }
+
+#[test]
+    fn iter() {
+        let mut l: List<i32> = List::new();
+
+        assert_eq!(l.pop(), None);
+
+        l.push(1);
+        l.push(2);
+        l.push(3);
+
+
+        {
+            let mut list_iterator = l.get_iterator();
+            assert_eq!(list_iterator.next(), Some(&3));
+            assert_eq!(list_iterator.next(), Some(&2));
+            assert_eq!(list_iterator.next(), Some(&1));
+            assert_eq!(list_iterator.next(), None);
+        }
+
+        l.push(5);
+    }
