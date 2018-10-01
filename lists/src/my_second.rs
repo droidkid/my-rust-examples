@@ -62,11 +62,12 @@ impl<T> Node<T> {
            */
 
         self.next.as_ref().map(
-            |boxed_node| {
-                &**boxed_node // Twice because we used as_ref
+            |ref_boxed_node| {
+                &** ref_boxed_node // Twice because we used as_ref
             }
-        )
+            )
     }
+
 }
 
 impl <T> List <T> {
@@ -136,50 +137,84 @@ impl <T> List <T> {
                 self.head = boxed_node.next.take();
                 boxed_node.elem
             }
-        )
+            )
     }
-    }
+}
 
-    pub struct LinkedListIter<'a, T:'a> {
-        next:  Option<&'a Node<T>>,
-    }
+pub struct LinkedListIter<'a, T:'a> {
+    next:  Option<&'a Node<T>>,
+}
 
-    impl <T> List<T> {
-        pub fn get_iterator(& self) -> LinkedListIter<T> {
-            LinkedListIter {
-                next: self.head.as_ref().map(
-                          |ref_boxed_node| {
-                              /*
-                               * First deref for ref
-                               * Second deref for box
-                               * Now we've got our node
-                               * Return a reference to Node
-                               *
-                               * &ref_boxed_node would return a reference to the Box.
-                               * We want reference to Node.
-                               */
-                              &**ref_boxed_node
-                          }
-                )
-            }
+impl <T> List<T> {
+    pub fn get_iterator(& self) -> LinkedListIter<T> {
+        LinkedListIter {
+            next: self.head.as_ref().map(
+                      |ref_boxed_node| {
+                          /*
+                           * First deref for ref
+                           * Second deref for box
+                           * Now we've got our node
+                           * Return a reference to Node
+                           *
+                           * &ref_boxed_node would return a reference to the Box.
+                           * We want reference to Node.
+                           */
+                          &**ref_boxed_node
+                      }
+                      )
         }
     }
+}
 
 
-    impl<'a, T> Iterator for LinkedListIter<'a, T> {
-        type Item = &'a T;
+impl<'a, T> Iterator for LinkedListIter<'a, T> {
+    type Item = &'a T;
 
 
-        fn next(&mut self) -> Option<Self::Item> {
-            match self.next {
-                Some(ref_to_node) => { // next is of type Option<& Node>
-                    self.next = ref_to_node.get_next_node();
-                    Some(& ref_to_node.elem)
-                }
-                None => None,
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next {
+            Some(ref_to_node) => { // next is of type Option<& Node>
+                self.next = ref_to_node.get_next_node();
+                Some(& ref_to_node.elem)
             }
+            None => None,
         }
     }
+}
+
+pub struct LinkedListIterMut<'a, T:'a> {
+    next: Option<&'a mut Node<T>>,
+}
+
+impl <T> List<T> {
+    pub fn get_mut_iterator(&mut self) -> LinkedListIterMut<T> {
+        LinkedListIterMut {
+            next: self.head.as_mut().map(
+                      |mut_ref_boxed_node| {
+                          &mut **mut_ref_boxed_node
+                      }
+                      )
+        }
+    }
+}
+
+impl<'a, T> Iterator for LinkedListIterMut<'a, T> {
+    type Item = &'a mut T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.next.take() {
+            Some(boxed_node) => {
+                self.next = boxed_node.next.as_mut().map(
+                        |mut_ref_boxed_node| {
+                            &mut **mut_ref_boxed_node
+                        }
+                    );
+                Some(&mut boxed_node.elem)
+            }
+            None => None,
+        }
+    }
+}
 
 #[test]
     fn basic() {
@@ -218,3 +253,14 @@ impl <T> List <T> {
 
         l.push(5);
     }
+
+#[test]
+fn iter_mut() {
+    let mut list = List::new();
+    list.push(1); list.push(2); list.push(3);
+
+    let mut iter = list.get_mut_iterator();
+    assert_eq!(iter.next(), Some(&mut 3));
+    assert_eq!(iter.next(), Some(&mut 2));
+    assert_eq!(iter.next(), Some(&mut 1));
+}
